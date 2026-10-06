@@ -1,0 +1,92 @@
+name: Windows build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore FRPMonitor.csproj
+      - name: Build
+        run: dotnet build FRPMonitor.csproj -c Release --no-restore
+      - name: Self-test
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          dotnet bin/Release/net10.0-windows/FRPMonitor.dll --self-test artifacts/self-test.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish folder edition
+        run: dotnet publish FRPMonitor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishReadyToRun=true -p:DebugType=None -o artifacts/FRPMonitor-Windows-x64
+      - name: Include instructions
+        shell: pwsh
+        run: Copy-Item -LiteralPath README.md -Destination artifacts/FRPMonitor-Windows-x64/README.md
+      - name: Package
+        id: version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content -LiteralPath FRPMonitor.csproj -Raw)).Project.PropertyGroup.Version
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $folder = Join-Path (Get-Location) 'artifacts/FRPMonitor-Windows-x64'
+          $zip = Join-Path (Get-Location) "artifacts/FRPMonitor-v$version-Windows-x64.zip"
+          [IO.Compression.ZipFile]::CreateFromDirectory($folder, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FRPMonitor-Windows-x64
+          path: artifacts/FRPMonitor-v*-Windows-x64.zip
+          retention-days: 14
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-test-report
+          path: artifacts/self-test.json
+          if-no-files-found: ignore
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: FRPMonitor-Windows-x64
+          path: release-files
+      - name: Publish versioned release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $tag = "v$env:RELEASE_VERSION"
+          $release = $null
+          try { $release = Invoke-RestMethod -Uri "$base/releases/tags/$tag" -Headers $headers }
+          catch { if ([int]$_.Exception.Response.StatusCode -ne 404) { throw } }
+          if (-not $release) {
+            $body = @{ tag_name = $tag; target_commitish = $env:GITHUB_SHA; name = "FRPMonitor $tag"; body = 'Windows x64 folder edition with bundled .NET runtime. Full source and generic FRP startup templates are in the repository.'; draft = $false; prerelease = $false } | ConvertTo-Json
+            $release = Invoke-RestMethod -Uri "$base/releases" -Method Post -Headers $headers -ContentType 'application/json' -Body $body
+          }
+          $file = Get-Item "release-files/FRPMonitor-$tag-Windows-x64.zip"
+          if (@($release.assets | Where-Object name -eq $file.Name).Count -eq 0) {
+            $upload = $release.upload_url.Split('{')[0] + '?name=' + [Uri]::EscapeDataString($file.Name)
+            Invoke-RestMethod -Uri $upload -Method Post -Headers $headers -ContentType 'application/zip' -InFile $file.FullName -TimeoutSec 300 | Out-Null
+          }
+          Write-Output $release.html_url
