@@ -24,6 +24,11 @@ public static class ExportService
         var required = excel ? ".xlsx" : ".csv";
         if (!Path.GetExtension(path).Equals(required, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("请使用 " + required + " 文件扩展名。");
+        if (range <= TimeSpan.FromMinutes(5))
+        {
+            var seconds = history.ExportSeconds(range, end);
+            return Task.Run(() => Exporting.SecondTrafficExporter.Export(path, seconds, range, end, excel, "FRP 上传 / 下载", "本机 FRP 原始秒级采样"));
+        }
         var snapshot = history.ExportMinutes(range, end);
         return Task.Run(() => { if (excel) ExcelExporter.Export(path, snapshot, range, end, demo, options); else ExportCsv(path, snapshot); });
     }

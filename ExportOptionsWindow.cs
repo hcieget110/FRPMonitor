@@ -44,7 +44,7 @@ public sealed class ExportOptionsWindow : Window
         var split = new CheckBox { Content = "按本机自然日拆分图表（保留全部分钟数据）", Foreground = Theme.Text, IsChecked = selectedRange >= TimeSpan.FromDays(1), Margin = new(0, 4, 0, 10), Visibility = excel ? Visibility.Visible : Visibility.Collapsed };
         var peaks = new CheckBox { Content = "增加秒级峰值原生折线图", Foreground = Theme.Text, IsChecked = true, Margin = new(0, 0, 0, 12), Visibility = excel ? Visibility.Visible : Visibility.Collapsed };
         stack.Children.Add(split); stack.Children.Add(peaks);
-        stack.Children.Add(new TextBlock { Text = "范围最多 7 天，按分钟边界选取，边缘最多含额外一分钟。分钟平均与秒级峰值分别展示；旧历史无法还原峰值，保留空缺。日期和时间按本机时区。", TextWrapping = TextWrapping.Wrap, Foreground = Theme.Muted, FontSize = 11 });
+        stack.Children.Add(new TextBlock { Text = "5 分钟以内导出原始秒级数据，横轴精确到秒；重启前仅保留分钟历史的部分留空。更长范围导出分钟平均与已记录秒级极值，最多 7 天。日期和时间按本机时区。", TextWrapping = TextWrapping.Wrap, Foreground = Theme.Muted, FontSize = 11 });
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new(0, 16, 0, 0) };
         buttons.Children.Add(Theme.Button("取消", (_, _) => Close()));
         buttons.Children.Add(Theme.Button("选择保存位置", (_, _) =>

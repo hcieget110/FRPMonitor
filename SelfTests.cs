@@ -177,7 +177,8 @@ public static class SelfTests
             var frozenPath = Path.Combine(folder, "snapshot.csv");
             var exportTask = ExportService.ExportAsync(frozenHistory, frozenPath, false, TimeSpan.FromMinutes(5), boundary.AddMinutes(1), false);
             frozenHistory.Add(boundary.AddSeconds(11), 900, 450, 1); exportTask.GetAwaiter().GetResult();
-            Check(File.ReadAllLines(frozenPath)[1].Split(',')[1] == "100", "background export uses an immutable snapshot while live collection continues");
+            var frozenRows = File.ReadAllLines(frozenPath).Skip(1).Select(line => line.Split(',')).ToArray();
+            Check(frozenRows.Length == 300 && frozenRows.Count(row => row[1].Length > 0) == 1 && double.Parse(frozenRows.Single(row => row[1].Length > 0)[1], System.Globalization.CultureInfo.InvariantCulture) == Units.Megabits(100), "background second export uses an immutable snapshot while live collection continues");
             var badExtensionRejected = false;
             try { ExportService.ExportAsync(frozenHistory, Path.Combine(folder, "wrong.csv"), true, TimeSpan.FromMinutes(5), boundary.AddMinutes(1), false); }
             catch (InvalidOperationException) { badExtensionRejected = true; }
@@ -383,6 +384,7 @@ public static class SelfTests
             frpFailed = false;
             try { exitedFrp.StartAsync().GetAwaiter().GetResult(); } catch (InvalidOperationException e) { frpFailed = e.Message.Contains("未检测到 frpc.exe"); }
             Check(frpFailed, "a queued task without a running client times out without a false started state");
+            Cloud.CloudTests.Run(folder, Check);
             File.WriteAllText(output, JsonSerializer.Serialize(new { result = "PASS", count = passed.Count, tests = passed }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
         }

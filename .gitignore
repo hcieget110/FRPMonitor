@@ -26,3 +26,7 @@ frps.ini
 *.pfx
 *.p12
 
+
+cloud-settings*.json
+*.xlsx
+FRP流量监控-v*/

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FRPMonitor.Cloud;
 
 namespace FRPMonitor;
 
@@ -17,11 +18,12 @@ public sealed class FloatWindow : Window
     private readonly Settings settings;
     private readonly MenuItem topmostItem;
     private readonly List<MenuItem> opacityItems = new();
+    private readonly CloudTrafficPanel cloudPanel;
     public FloatWindow(MainWindow owner, Settings preferences)
     {
         main = owner; settings = preferences;
         FontFamily = new System.Windows.Media.FontFamily("Microsoft YaHei UI");
-        Width = 280; Height = 144; Title = "FRP 流量悬浮窗 v" + AppInfo.Version;
+        Width = 280; Height = 300; SizeToContent = SizeToContent.Height; Title = "FRP / 云主机流量悬浮窗 v" + AppInfo.Version;
         WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = System.Windows.Media.Brushes.Transparent;
         Icon = AppIcons.WindowIcon;
         ShowInTaskbar = false; Topmost = settings.FloatTopmost; ResizeMode = ResizeMode.NoResize;
@@ -38,11 +40,13 @@ public sealed class FloatWindow : Window
         var ds = new StackPanel(); ds.Children.Add(Theme.Label("↓ 下载", 9, Theme.Download)); ds.Children.Add(RateBox(down));
         Grid.SetColumn(ds, 2); columns.Children.Add(us); columns.Children.Add(ds); stack.Children.Add(columns);
         total.Margin = new(0, 2, 0, 1); stack.Children.Add(total); stack.Children.Add(chart); stack.Children.Add(state);
+        stack.Children.Add(new Border { Height = 1, Background = Theme.Border, Margin = new(0, 9, 0, 9) });
+        cloudPanel = new(main.ConfigureCloud, main.ExportCloud, true); stack.Children.Add(cloudPanel);
         Content = Theme.Card(stack, new Thickness(12, 9, 12, 8));
         MouseLeftButtonDown += (_, e) =>
         {
             if (e.ClickCount == 2) main.Reveal();
-            else { try { DragMove(); SavePosition(); } catch (InvalidOperationException) { } }
+            else if (!IsControl(e.OriginalSource as DependencyObject)) { try { DragMove(); SavePosition(); } catch (InvalidOperationException) { } }
         };
         var work = SystemParameters.WorkArea;
         Left = settings.FloatLeft >= 0 ? settings.FloatLeft : work.Right - Width - 24;
@@ -66,9 +70,20 @@ public sealed class FloatWindow : Window
         }
         RefreshOpacityChecks();
         menu.Opened += (_, _) => RefreshOpacityChecks();
+        menu.Items.Add(new Separator()); Item("云主机设置", main.ConfigureCloud);
+        Item("云主机：导出最近 1 分钟 Excel", () => main.ExportCloud(TimeSpan.FromMinutes(1), true));
+        Item("云主机：导出最近 5 分钟 Excel", () => main.ExportCloud(TimeSpan.FromMinutes(5), true));
+        Item("云主机：导出最近 1 分钟 CSV", () => main.ExportCloud(TimeSpan.FromMinutes(1), false));
+        Item("云主机：导出最近 5 分钟 CSV", () => main.ExportCloud(TimeSpan.FromMinutes(5), false));
         Item("退出", main.Quit);
         ContextMenu = menu;
     }
+    private static bool IsControl(DependencyObject? element)
+    {
+        while (element != null) { if (element is System.Windows.Controls.Primitives.ButtonBase) return true; element = element is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(element) : LogicalTreeHelper.GetParent(element); }
+        return false;
+    }
+    public void UpdateCloud(CloudFrame frame, List<TrafficPoint> points, DateTimeOffset now) => cloudPanel.Update(frame, points, now);
     public void SetTopmost(bool value) { Topmost = value; topmostItem.IsChecked = value; }
     private void RefreshOpacityChecks()
     {

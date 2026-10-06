@@ -1,4 +1,4 @@
-# FRP 流量监控 v1.1.4
+# FRP 流量监控 v1.1.5
 
 Windows 10 / 11 x64 桌面软件，使用 Windows ETW 按进程统计 TCP / UDP、IPv4 / IPv6 的发送与接收字节数。默认监控 frpc.exe 和 frps.exe，支持多个实例和进程重启。带宽使用 Mb/s（小写 b），累计流量使用 KiB / MiB / GiB（大写 B）。
 
@@ -12,9 +12,18 @@ GitHub Actions 在 main 分支更新后编译、运行自检并打包；全部�
 
 完整解压文件夹版到固定目录，双击 FRPMonitor.exe，在 Windows UAC 提示中允许管理员权限。旁边的 DLL、JSON、语言目录与运行时必须一起保留，不要只复制 EXE。发布包自带 .NET 运行时，不需要安装 Python、.NET 或抓包驱动。
 
-升级前从旧版托盘菜单选择“退出”，再启动新版；历史与设置保存在当前用户的本地应用数据目录，保留原有统计范围时会继续读取原历史。主窗口、悬浮窗及托盘菜单均显示 v1.1.4。托盘“版本与运行位置”可以确认实际启动的程序路径。
+升级前从旧版托盘菜单选择“退出”，再启动新版；历史与设置保存在当前用户的本地应用数据目录，保留原有统计范围时会继续读取原历史。主窗口、悬浮窗及托盘菜单均显示 v1.1.5。托盘“版本与运行位置”可以确认实际启动的程序路径。
 
 若开机自启已开启，且新版放在不同目录，请在新版“软件设置”保持自启勾选并保存一次，将任务更新到新版路径。
+
+## v1.1.5 的改进
+
+- 合并悬浮窗：上方本机 FRP，下方云主机整体流量，两个区域独立显示上传、下载、合计及最近 5 分钟折线，带宽单位 Mb/s。
+- 云主机采用一个持久 SSH 连接，每秒读取 Linux 默认路由网卡计数；只保留 300 个秒级点，不写历史数据库。断线自动重连，空缺不补零，也不影响本机 FRP 采集。
+- 云主机“设置”可开启 / 关闭并填写 SSH 连接信息。云端需要 python3，无需 root 或安装服务；校验主机指纹，密码仅保存在当前用户的 Windows 凭据管理器。
+- 云主机支持最近 1 分钟 / 5 分钟的秒级 Excel 原生折线图和 CSV，详细图每点标注数值，横轴显示 HH:mm:ss。悬浮窗右键也可导出。
+- FRP 选择 5 分钟以内的范围，同样导出原始秒级数据和可编辑的秒级折线图，不再使用分钟平均。秒级数据仅限本次运行保留的采样，重启前无法还原的秒留空。更长范围仍使用分钟历史和已记录秒级极值。
+- `Cloud/` 独立封装云端采集、历史、设置、凭据和界面；`Exporting/` 提供无状态的通用秒级图表工具。未来开发须遵守 `AGENTS.md`，模块边界见 `ARCHITECTURE.md`。
 
 ## v1.1.4 的改进
 
@@ -137,8 +146,10 @@ ETW 长度不是物理网卡完整帧、运营商计费或 FRP 应用层有效�
 
 v1.1.4 完成 83 项自检，覆盖采样、汇总、异常字节保留、历史损坏恢复、设置修复、并发发现、连接淘汰、退出协调、原生图表与导出兼容，以及 FRP 重复启动保护、错误与超时。21 项界面与运行回归检查包含按钮 / 托盘状态同步、启动中禁用、最小窗口布局；实际检测了 SYSTEM 下运行的 frpc.exe，再次请求启动保持原 PID。合成采集测试未替代管理员权限下的真实 ETW 验证。
 
-依赖：Microsoft.Diagnostics.Tracing.TraceEvent 3.2.8（MIT）；DocumentFormat.OpenXml 3.5.1（MIT）。
+依赖：Microsoft.Diagnostics.Tracing.TraceEvent 3.2.8（MIT）；DocumentFormat.OpenXml 3.5.1（MIT）；SSH.NET 2026.0.0（MIT）。
 实现参考：https://github.com/microsoft/perfview/tree/main/src/TraceEvent
 ETW：https://learn.microsoft.com/en-us/windows/win32/etw/tcpip
 OpenXML：https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/overview
 ReadyToRun：https://learn.microsoft.com/en-us/dotnet/core/deploying/ready-to-run
+
+云主机连接自检：`--cloud-probe 报告路径 秒数`，使用本机已保存的设置与凭据；报告仅含采样状态和流量，不含密码。v1.1.5 已通过 98 项自检，含秒级导出和 OpenXML 校验。

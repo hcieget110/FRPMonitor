@@ -206,6 +206,12 @@ public sealed class History
         var cutoff = now.AddDays(-7).ToUnixTimeSeconds() / 60;
         foreach (var key in minutes.Keys.TakeWhile(k => k < cutoff).ToArray()) minutes.Remove(key);
     }
+    // Export raw samples only. Persisted minute buckets cannot reconstruct per-second history.
+    public List<TrafficPoint> ExportSeconds(TimeSpan range, DateTimeOffset end)
+    {
+        if (range <= TimeSpan.Zero || range > TimeSpan.FromMinutes(5)) throw new ArgumentOutOfRangeException(nameof(range));
+        lock (gate) return live.Where(p => p.Time.ToUnixTimeSeconds() > end.ToUnixTimeSeconds() - (long)range.TotalSeconds && p.Time.ToUnixTimeSeconds() <= end.ToUnixTimeSeconds()).ToList();
+    }
     public List<TrafficPoint> Points(TimeSpan range, DateTimeOffset now)
     {
         lock (gate)

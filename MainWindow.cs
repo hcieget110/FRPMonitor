@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
+using FRPMonitor.Cloud;
 
 namespace FRPMonitor;
 
@@ -55,10 +56,15 @@ public sealed class MainWindow : Window
     private readonly TextBlock alert = Theme.Label("", 11, Theme.Brush("#FFBA80"));
     private readonly Button floatButton;
     private Snapshot sample = new(0, 0, 0, 0, 1, new());
+    private CloudProfile cloudProfile;
+    private CloudMonitor cloud;
+    private readonly CloudTrafficPanel cloudPanel;
+    private bool cloudChanging, cloudExporting;
     private Action? updateRangeColors;
     public MainWindow(Settings preferences, bool isPreview = false, string? previewFolder = null, bool startInTray = false)
     {
         settings = preferences; settings.Normalize(); preview = isPreview;
+        cloudProfile = preview ? new() : CloudProfile.Load(); cloud = new(cloudProfile);
         settings.ShowFloat = true; // Hiding is temporary; every new launch shows the floating monitor.
         ShowActivated = !startInTray;
         Background = Theme.Background; Foreground = Theme.Text; FontFamily = new FontFamily("Microsoft YaHei UI");
@@ -174,7 +180,10 @@ public sealed class MainWindow : Window
         processHead.Children.Add(Theme.Label("监控中的进程", 15, Theme.Text, FontWeights.SemiBold)); processes.Children.Add(processHead);
         var scroll = new ScrollViewer { Content = processRows, MaxHeight = 80, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new(0, 8, 0, 0) }; processes.Children.Add(scroll);
         var pc = Theme.Card(processes, new Thickness(20, 15, 20, 15)); pc.Margin = new(0, 18, 0, 14); Grid.SetRow(pc, 3); root.Children.Add(pc);
-        var bottom = new StackPanel(); bottom.Children.Add(alert); bottom.Children.Add(todaySummary); bottom.Children.Add(footer); Grid.SetRow(bottom, 4); root.Children.Add(bottom); Content = root;
+        cloudPanel = new(ConfigureCloud, ExportCloud, false);
+        var cloudCard = Theme.Card(cloudPanel, new Thickness(20, 15, 20, 15)); cloudCard.Margin = new(0, 0, 0, 14);
+        var bottom = new StackPanel(); bottom.Children.Add(cloudCard); bottom.Children.Add(alert); bottom.Children.Add(todaySummary); bottom.Children.Add(footer); Grid.SetRow(bottom, 4); root.Children.Add(bottom);
+        Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         // Update range appearance without separate selection state.
         void RangeColors() { foreach (Button b in ranges.Children) { var selected = viewEnd == null && (TimeSpan)b.Tag == period; b.Background = selected ? Theme.Brush("#24483F") : Theme.Brush("#202E43"); b.Foreground = selected ? Theme.Upload : Theme.Muted; } }
         updateRangeColors = RangeColors; RangeColors();
@@ -184,7 +193,7 @@ public sealed class MainWindow : Window
         Loaded += (_, _) =>
         {
             if (preview) { SeedPreview(); return; }
-            CreateTray(); StartCollector(); RefreshFrpStatus();
+            CreateTray(); StartCollector(); RefreshFrpStatus(); cloud.Start();
             if (settings.ShowFloat) ShowFloating();
             if (startInTray) Hide();
             timer.Tick += (_, _) => Tick(); timer.Start();
@@ -240,6 +249,10 @@ public sealed class MainWindow : Window
         // Build only the views that the user can currently see.
         if (IsVisible && WindowState != WindowState.Minimized) RefreshMainView(ready, state, DateTimeOffset.Now);
         if (floating?.IsVisible == true) floating.Update(sample, ready, state, history);
+        var cloudNow = DateTimeOffset.Now; var cloudPoints = cloud.History.Snapshot(TimeSpan.FromMinutes(5), cloudNow);
+        var cloudState = preview ? new CloudFrame(true, "演示预览 · 云主机整体流量 · 1 秒采样", cloudNow, "eth0") : cloud.Current;
+        if (IsVisible && WindowState != WindowState.Minimized) cloudPanel.Update(cloudState, cloudPoints, cloudNow);
+        if (floating?.IsVisible == true) floating.UpdateCloud(cloudState, cloudPoints, cloudNow);
         if (tray != null)
         {
             var trayText = "FRP  ↑ " + (ready ? Units.Rate(sample.UploadBytes / sample.Seconds) : "—") + "  ↓ " + (ready ? Units.Rate(sample.DownloadBytes / sample.Seconds) : "—");
@@ -332,6 +345,9 @@ public sealed class MainWindow : Window
         menu.Items.Add("连接明细与统计范围", null, (_, _) => Dispatcher.Invoke(ShowConnections));
         menu.Items.Add("采集事件时间线", null, (_, _) => Dispatcher.Invoke(ShowTimeline));
         menu.Items.Add("导出诊断报告", null, (_, _) => Dispatcher.Invoke(ExportDiagnostic));
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("云主机设置", null, (_, _) => Dispatcher.Invoke(ConfigureCloud));
+        foreach (var minutes in new[] { 1, 5 }) { var duration = TimeSpan.FromMinutes(minutes); menu.Items.Add("云主机：导出最近 " + minutes + " 分钟 Excel", null, (_, _) => Dispatcher.Invoke(() => ExportCloud(duration, true))); }
         menu.Items.Add(new Forms.ToolStripSeparator()); menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(Quit));
         return menu;
     }
@@ -392,6 +408,33 @@ public sealed class MainWindow : Window
         finally { changingScope = false; }
     }
     private bool changingScope;
+    public async void ConfigureCloud()
+    {
+        if (quitting || cloudChanging) return;
+        var dialog = new CloudSettingsWindow(this, cloudProfile, preview);
+        if (dialog.ShowDialog() != true) return;
+        cloudChanging = true;
+        try
+        {
+            await operations.Run(async () => { await cloud.StopAsync(); cloudProfile = dialog.Profile; cloud = new(cloudProfile); if (!preview && !quitting) cloud.Start(); });
+            RefreshView();
+        }
+        catch (Exception e) { if (!quitting) System.Windows.MessageBox.Show(this, e.Message, "云主机设置"); }
+        finally { cloudChanging = false; }
+    }
+    public async void ExportCloud(TimeSpan range, bool excel)
+    {
+        if (quitting || cloudChanging || cloudExporting) return;
+        var end = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.Now.ToUnixTimeSeconds());
+        var snapshot = cloud.History.Snapshot(range, end);
+        if (snapshot.Count == 0) { System.Windows.MessageBox.Show(this, "该时段还没有有效的云主机采样数据。请先连接并等待采样。", "云主机导出"); return; }
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "导出云主机秒级流量", Filter = excel ? "Excel 秒级折线图 (*.xlsx)|*.xlsx" : "CSV 秒级数据 (*.csv)|*.csv", AddExtension = true, DefaultExt = excel ? ".xlsx" : ".csv", FileName = CloudExporter.FileName(range, end, excel) };
+        if (dialog.ShowDialog(this) != true) return;
+        cloudExporting = true;
+        try { await operations.Run(() => System.Threading.Tasks.Task.Run(() => CloudExporter.Export(dialog.FileName, snapshot, range, end, excel))); if (!quitting) new ExportCompletedWindow(this, dialog.FileName, excel, "已导出云主机秒级流量" + (excel ? "和可编辑 Excel 折线图。" : " CSV 数据。") + "缺失采样留空。").ShowDialog(); }
+        catch (Exception e) { if (!quitting) System.Windows.MessageBox.Show(this, e.Message, "云主机导出失败"); }
+        finally { cloudExporting = false; }
+    }
     private async void ShowConnections()
     {
         if (changingScope || quitting) return;
@@ -432,7 +475,7 @@ public sealed class MainWindow : Window
             exporting = true;
             status.Text = "正在后台生成导出文件…";
             await operations.Run(() => ExportService.ExportAsync(history, dialog.FileName, excel, exportRange, choices.End, preview, choices.Options));
-            if (!quitting) new ExportCompletedWindow(this, dialog.FileName, excel).ShowDialog();
+            if (!quitting) new ExportCompletedWindow(this, dialog.FileName, excel, exportRange <= TimeSpan.FromMinutes(5) ? "已导出 FRP 秒级数据" + (excel ? "和可编辑 Excel 秒级折线图。" : " CSV。") + "未采集时段留空。" : null).ShowDialog();
         }
         catch (Exception e) { if (!quitting) System.Windows.MessageBox.Show(this, e.Message, "导出失败"); }
         finally { exporting = false; }
@@ -447,7 +490,7 @@ public sealed class MainWindow : Window
         quitting = true; timer.Stop();
         IsEnabled = false;
         status.Text = "正在保存历史并等待导出完成…";
-        try { await operations.FinishAsync(); if (!preview) { if (monitor != null) await monitor.StopAsync(); else await history.SaveAsync(); floating?.SavePosition(); SaveSettings(); } }
+        try { await operations.FinishAsync(); await cloud.StopAsync(); if (!preview) { if (monitor != null) await monitor.StopAsync(); else await history.SaveAsync(); floating?.SavePosition(); SaveSettings(); } }
         catch (Exception e) { System.Windows.MessageBox.Show(this, e.Message, "退出保存失败"); }
         floating?.Close(); tray?.Dispose(); trayIcon?.Dispose(); System.Windows.Application.Current.Shutdown();
     }
@@ -467,6 +510,7 @@ public sealed class MainWindow : Window
     {
         frpRunning = true; UpdateFrpControls();
         var now = DateTimeOffset.Now; var random = new Random(17);
+        for (int i = 299; i >= 0; i--) cloud.History.Add(new(now.AddSeconds(-i), (0.04 + Math.Abs(Math.Sin(i / 16.0)) * .25) * 125000, (0.03 + Math.Abs(Math.Cos(i / 21.0)) * .35) * 125000));
         for (int i = 7 * 24 * 60 - 1; i >= 0; i--)
         {
             if (i <= 5) continue;

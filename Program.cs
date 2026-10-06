@@ -14,6 +14,7 @@ public static class Program
     public static int Main(string[] args)
     {
         if (args.Length >= 2 && args[0] == "--self-test") return SelfTests.Run(args[1]);
+        if (args.Length >= 2 && args[0] == "--cloud-probe") return Cloud.CloudProbe.Run(args[1], args.Length >= 3 ? int.Parse(args[2]) : 20);
         if (args.Length >= 2 && args[0] == "--probe") return Probe.Run(args[1], args.Length >= 3 ? int.Parse(args[2]) : 35);
         if (args.Length >= 2 && args[0] == "--startup-test") return StartupService.RunSelfTest(args[1]);
         var preview = args.Length >= 2 && args[0] == "--preview";
