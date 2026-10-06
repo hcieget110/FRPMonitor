@@ -84,8 +84,8 @@ public sealed class TrafficChart : FrameworkElement
         var compactTimeAxis = Compact && ActualHeight >= 38;
         var left = 57.0;
         if (Compact)
-            left = Math.Max(Text(scaleMaximum.ToString("0.####", CultureInfo.InvariantCulture), Theme.Muted, 8).Width,
-                Text((scaleMaximum / 2).ToString("0.####", CultureInfo.InvariantCulture), Theme.Muted, 8).Width) + 5;
+            left = Math.Max(Text(scaleMaximum.ToString("0.##", CultureInfo.InvariantCulture), Theme.Muted, 8).Width,
+                Text((scaleMaximum / 2).ToString("0.##", CultureInfo.InvariantCulture), Theme.Muted, 8).Width) + 5;
         var rect = new Rect(left, Compact ? 6 : 23, Math.Max(1, ActualWidth - left - (Compact ? 1 : 14)),
             Math.Max(1, ActualHeight - (Compact ? compactTimeAxis ? 18 : 10 : 60)));
         plotRect = rect;
@@ -127,7 +127,7 @@ public sealed class TrafficChart : FrameworkElement
             for (int i = 0; i <= 2; i++)
             {
                 var y = rect.Top + i * rect.Height / 2;
-                var label = Text((max * (2 - i) / 2).ToString("0.####", CultureInfo.InvariantCulture), Theme.Muted, 8);
+                var label = Text((max * (2 - i) / 2).ToString("0.##", CultureInfo.InvariantCulture), Theme.Muted, 8);
                 dc.DrawText(label, new Point(rect.Left - 5 - label.Width, y - label.Height / 2));
                 if (i < 2) dc.DrawLine(grid, new Point(rect.Left, y), new Point(rect.Right, y));
             }
@@ -149,7 +149,7 @@ public sealed class TrafficChart : FrameworkElement
             {
                 var y = rect.Top + i * rect.Height / 4;
                 dc.DrawLine(grid, new(rect.Left, y), new(rect.Right, y));
-                Label(dc, (max * (4 - i) / 4).ToString("0.####", CultureInfo.InvariantCulture), rect.Left - 9, y - 7, Theme.Muted, 10, 1);
+                Label(dc, (max * (4 - i) / 4).ToString("0.##", CultureInfo.InvariantCulture), rect.Left - 9, y - 7, Theme.Muted, 10, 1);
             }
             var divisions = range.TotalDays >= 2 ? 7 : 6;
             for (int i = 0; i <= divisions; i++)

@@ -344,5 +344,5 @@ public static class Units
     }
     public static double Megabits(double bytesPerSecond) => bytesPerSecond * 8 / 1_000_000;
     public static string Rate(double bytesPerSecond) => Megabits(bytesPerSecond).ToString("F2", CultureInfo.InvariantCulture) + " Mb/s";
-    public static string PointRate(double bytesPerSecond) => Megabits(bytesPerSecond).ToString("0.######", CultureInfo.InvariantCulture) + " Mb/s";
+    public static string PointRate(double bytesPerSecond) => Megabits(bytesPerSecond).ToString("0.00", CultureInfo.InvariantCulture) + " Mb/s";
 }

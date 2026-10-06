@@ -38,9 +38,9 @@ public static class ExportService
         var sb = new StringBuilder("时间(本机时区),上传字节,下载字节,采集秒数,平均上传Mb每秒,平均下载Mb每秒,上传秒级峰值Mb每秒,下载秒级峰值Mb每秒,峰值有效采集秒数,上传秒级最低Mb每秒,下载秒级最低Mb每秒,最低值有效采集秒数,速率不确定上传字节,速率不确定下载字节,异常间隔次数(按接收分钟归档)\r\n");
         foreach (var m in minutes.Where(m => m.Seconds > 0 || m.UncertainIntervals > 0))
             sb.AppendLine(string.Join(",", m.Point.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz"), m.UploadBytes, m.DownloadBytes,
-                m.Seconds.ToString("F3", CultureInfo.InvariantCulture), m.Seconds > 0 ? Units.Megabits(m.Point.Upload).ToString("F6", CultureInfo.InvariantCulture) : "", m.Seconds > 0 ? Units.Megabits(m.Point.Download).ToString("F6", CultureInfo.InvariantCulture) : "",
-                m.PeakUpload.HasValue ? Units.Megabits(m.PeakUpload.Value).ToString("F6", CultureInfo.InvariantCulture) : "", m.PeakDownload.HasValue ? Units.Megabits(m.PeakDownload.Value).ToString("F6", CultureInfo.InvariantCulture) : "", m.PeakSeconds.ToString("F3", CultureInfo.InvariantCulture),
-                m.MinimumUpload.HasValue ? Units.Megabits(m.MinimumUpload.Value).ToString("F6", CultureInfo.InvariantCulture) : "", m.MinimumDownload.HasValue ? Units.Megabits(m.MinimumDownload.Value).ToString("F6", CultureInfo.InvariantCulture) : "", m.MinimumSeconds > 0 ? m.MinimumSeconds.ToString("F3", CultureInfo.InvariantCulture) : "",
+                m.Seconds.ToString("F2", CultureInfo.InvariantCulture), m.Seconds > 0 ? Units.Megabits(m.Point.Upload).ToString("F2", CultureInfo.InvariantCulture) : "", m.Seconds > 0 ? Units.Megabits(m.Point.Download).ToString("F2", CultureInfo.InvariantCulture) : "",
+                m.PeakUpload.HasValue ? Units.Megabits(m.PeakUpload.Value).ToString("F2", CultureInfo.InvariantCulture) : "", m.PeakDownload.HasValue ? Units.Megabits(m.PeakDownload.Value).ToString("F2", CultureInfo.InvariantCulture) : "", m.PeakSeconds.ToString("F2", CultureInfo.InvariantCulture),
+                m.MinimumUpload.HasValue ? Units.Megabits(m.MinimumUpload.Value).ToString("F2", CultureInfo.InvariantCulture) : "", m.MinimumDownload.HasValue ? Units.Megabits(m.MinimumDownload.Value).ToString("F2", CultureInfo.InvariantCulture) : "", m.MinimumSeconds > 0 ? m.MinimumSeconds.ToString("F2", CultureInfo.InvariantCulture) : "",
                 m.UncertainUploadBytes, m.UncertainDownloadBytes, m.UncertainIntervals));
         Disk.AtomicText(path, sb.ToString(), new UTF8Encoding(true));
     }

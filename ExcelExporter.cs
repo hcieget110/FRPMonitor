@@ -170,8 +170,8 @@ public static class ExcelExporter
         XElement Series(int index, string name, string color, string column)
         {
             var categories = C("strCache", V("ptCount", minutes.Count), minutes.Select((m, i) => C("pt", A("idx", i), C("v", m.Point.Time.ToLocalTime().ToString("MM/dd HH:mm")))));
-            var values = C("numCache", C("formatCode", "0.0000"), V("ptCount", minutes.Count), minutes.Select((m, i) => !Value(m, index).HasValue ? null : C("pt", A("idx", i), C("v", Number(Units.Megabits(Value(m, index)!.Value))))));
-            var labels = showPointValues ? C("dLbls", C("numFmt", A("formatCode", "0.######"), A("sourceLinked", 0)),
+            var values = C("numCache", C("formatCode", Exporting.TrafficWorkbookPresentation.NumberFormat), V("ptCount", minutes.Count), minutes.Select((m, i) => !Value(m, index).HasValue ? null : C("pt", A("idx", i), C("v", Number(Units.Megabits(Value(m, index)!.Value))))));
+            var labels = showPointValues ? C("dLbls", C("numFmt", A("formatCode", Exporting.TrafficWorkbookPresentation.NumberFormat), A("sourceLinked", 0)),
                 C("txPr", new XElement(a + "bodyPr", A("rot", 0)), new XElement(a + "lstStyle"),
                     new XElement(a + "p", new XElement(a + "pPr", new XElement(a + "defRPr", A("sz", 1000),
                         new XElement(a + "solidFill", new XElement(a + "srgbClr", A("val", color))))), new XElement(a + "endParaRPr", A("lang", "zh-CN")))),
@@ -184,42 +184,13 @@ public static class ExcelExporter
                 C("val", C("numRef", C("f", "'分钟数据'!$" + column + "$" + firstRow + ":$" + column + "$" + lastRow), values)), V("smooth", 0));
         }
         var skip = Math.Max(1, (int)Math.Ceiling(minutes.Count * 100.0 / width));
-        var peak = minutes.Select(m => Units.Megabits(Math.Max(Value(m, 0) ?? 0, Value(m, 1) ?? 0))).DefaultIfEmpty(0).Max();
-        var axisFormat = peak > 0 && peak < 0.01 ? "0.000000" : "0.00";
+        var axisFormat = Exporting.TrafficWorkbookPresentation.NumberFormat;
         var plot = C("plotArea", C("layout"), C("lineChart", V("grouping", "standard"), V("varyColors", 0), Series(0, peakSeries ? "上传秒级峰值 Mb/s" : "上传分钟平均 Mb/s", "119B85", peakSeries ? "H" : "B"), Series(1, peakSeries ? "下载秒级峰值 Mb/s" : "下载分钟平均 Mb/s", "5479DC", peakSeries ? "I" : "C"), V("marker", 0), V("smooth", 0), V("axId", 201), V("axId", 202)),
             C("catAx", V("axId", 201), C("scaling", V("orientation", "minMax")), V("delete", 0), V("axPos", "b"), V("majorTickMark", "none"), V("minorTickMark", "none"), V("tickLblPos", "nextTo"), V("crossAx", 202), V("crosses", "autoZero"), V("auto", 0), V("lblAlgn", "ctr"), V("lblOffset", 100), V("tickLblSkip", skip), V("tickMarkSkip", skip)),
             C("valAx", V("axId", 202), C("scaling", V("orientation", "minMax"), V("min", 0)), V("delete", 0), V("axPos", "l"), C("majorGridlines", Line("E2E8EF", 6350)), Title("Mb/s"), C("numFmt", A("formatCode", axisFormat), A("sourceLinked", 0)), V("majorTickMark", "none"), V("minorTickMark", "none"), V("tickLblPos", "nextTo"), V("crossAx", 201), V("crosses", "autoZero"), V("crossBetween", "between")));
         return C("chartSpace", new XAttribute(XNamespace.Xmlns + "a", a), new XAttribute(XNamespace.Xmlns + "r", r), V("date1904", 0), V("lang", "zh-CN"),
-            C("chart", Title(title), V("autoTitleDeleted", 0), plot, C("legend", V("legendPos", "b"), C("layout"), V("overlay", 0)), V("plotVisOnly", 1), V("dispBlanksAs", "gap"), V("showDLblsOverMax", 0)));
+            C("chart", Exporting.TrafficWorkbookPresentation.ChartTitle(title, width), V("autoTitleDeleted", 0), plot, C("legend", V("legendPos", "b"), C("layout"), V("overlay", 0)), V("plotVisOnly", 1), V("dispBlanksAs", "gap"), V("showDLblsOverMax", 0)));
     }
 
-    private static string Styles() => S("styleSheet",
-        S("numFmts", A("count", 2), S("numFmt", A("numFmtId", 164), A("formatCode", "0.0000")), S("numFmt", A("numFmtId", 165), A("formatCode", "yyyy-mm-dd hh:mm"))),
-        S("fonts", A("count", 7), S("font", S("sz", A("val", 11)), S("name", A("val", "Microsoft YaHei"))),
-            S("font", S("b"), S("sz", A("val", 11)), S("color", A("rgb", "FFFFFFFF")), S("name", A("val", "Microsoft YaHei"))),
-            S("font", S("b"), S("sz", A("val", 20)), S("name", A("val", "Microsoft YaHei"))),
-            SummaryFont("FF087F6C", false), SummaryFont("FF345FB7", false), SummaryFont("FF087F6C", true), SummaryFont("FF345FB7", true)),
-        S("fills", A("count", 5), S("fill", S("patternFill", A("patternType", "none"))), S("fill", S("patternFill", A("patternType", "gray125"))),
-            SolidFill("FF1D3048"), SolidFill("FFEEF9F6"), SolidFill("FFEFF3FC")),
-        S("borders", A("count", 3), S("border", S("left"), S("right"), S("top"), S("bottom"), S("diagonal")),
-            SummaryBorder("FFD5E0EB"), SummaryBorder("FFFFFFFF")),
-        S("cellStyleXfs", A("count", 1), S("xf", A("numFmtId", 0), A("fontId", 0), A("fillId", 0), A("borderId", 0))),
-        S("cellXfs", A("count", 10),
-            S("xf", A("numFmtId", 0), A("fontId", 0), A("fillId", 0), A("borderId", 0), A("xfId", 0)),
-            S("xf", A("numFmtId", 0), A("fontId", 1), A("fillId", 2), A("borderId", 0), A("xfId", 0), A("applyFont", 1), A("applyFill", 1)),
-            S("xf", A("numFmtId", 0), A("fontId", 2), A("fillId", 0), A("borderId", 0), A("xfId", 0), A("applyFont", 1)),
-            S("xf", A("numFmtId", 164), A("fontId", 0), A("fillId", 0), A("borderId", 0), A("xfId", 0), A("applyNumberFormat", 1)),
-            S("xf", A("numFmtId", 165), A("fontId", 0), A("fillId", 0), A("borderId", 0), A("xfId", 0), A("applyNumberFormat", 1)),
-            SummaryStyle(0, 1, 2, 2), SummaryStyle(164, 3, 3, 1), SummaryStyle(164, 4, 4, 1), SummaryStyle(0, 5, 3, 1), SummaryStyle(0, 6, 4, 1)),
-        S("cellStyles", A("count", 1), S("cellStyle", A("name", "Normal"), A("xfId", 0), A("builtinId", 0)))).ToString();
-
-    private static XElement SummaryFont(string color, bool bold) => S("font", bold ? S("b") : null,
-        S("sz", A("val", 12)), S("color", A("rgb", color)), S("name", A("val", "Microsoft YaHei")));
-    private static XElement SolidFill(string color) => S("fill", S("patternFill", A("patternType", "solid"),
-        S("fgColor", A("rgb", color)), S("bgColor", A("indexed", 64))));
-    private static XElement SummaryBorder(string color) => S("border",
-        new[] { "left", "right", "top", "bottom" }.Select(edge => S(edge, A("style", "thin"), S("color", A("rgb", color)))), S("diagonal"));
-    private static XElement SummaryStyle(int format, int font, int fill, int border) => S("xf", A("numFmtId", format),
-        A("fontId", font), A("fillId", fill), A("borderId", border), A("xfId", 0), A("applyFont", 1), A("applyFill", 1),
-        A("applyBorder", 1), A("applyNumberFormat", 1), A("applyAlignment", 1), S("alignment", A("horizontal", "center"), A("vertical", "center")));
+    private static string Styles() => Exporting.TrafficWorkbookPresentation.Styles("yyyy-mm-dd hh:mm").ToString();
 }

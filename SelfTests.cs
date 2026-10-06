@@ -133,7 +133,7 @@ public static class SelfTests
             var exported = csvLines[1].Split(',');
             var sourceMinute = restored.ExportMinutes(TimeSpan.FromDays(7), now.AddSeconds(2)).First(m => m.Seconds > 0);
             var expectedRate = sourceMinute.UploadBytes / sourceMinute.Seconds * 8 / 1000000;
-            Check(csvLines[0].Contains("平均上传Mb每秒") && csvLines.Length >= 3 && Math.Abs(double.Parse(exported[4], System.Globalization.CultureInfo.InvariantCulture) - expectedRate) < 0.000001,
+            Check(csvLines[0].Contains("平均上传Mb每秒") && csvLines.Length >= 3 && Math.Abs(double.Parse(exported[4], System.Globalization.CultureInfo.InvariantCulture) - expectedRate) <= 0.005 && System.Text.RegularExpressions.Regex.IsMatch(exported[4], @"^\d+\.\d{2}$"),
                 "CSV bandwidth uses decimal Mb/s and preserves original byte totals and coverage");
             Check(new Settings { ProcessNames = "FRPC.exe，frps;frpc" }.Names.SequenceEqual(new[] { "frpc", "frps" }), "custom names normalize and deduplicate");
             File.WriteAllText(Path.Combine(folder, "history-broken.json"), "broken json");
@@ -178,7 +178,7 @@ public static class SelfTests
             var exportTask = ExportService.ExportAsync(frozenHistory, frozenPath, false, TimeSpan.FromMinutes(5), boundary.AddMinutes(1), false);
             frozenHistory.Add(boundary.AddSeconds(11), 900, 450, 1); exportTask.GetAwaiter().GetResult();
             var frozenRows = File.ReadAllLines(frozenPath).Skip(1).Select(line => line.Split(',')).ToArray();
-            Check(frozenRows.Length == 300 && frozenRows.Count(row => row[1].Length > 0) == 1 && double.Parse(frozenRows.Single(row => row[1].Length > 0)[1], System.Globalization.CultureInfo.InvariantCulture) == Units.Megabits(100), "background second export uses an immutable snapshot while live collection continues");
+            Check(frozenRows.Length == 300 && frozenRows.Count(row => row[1].Length > 0) == 1 && frozenRows.Single(row => row[1].Length > 0)[1] == "0.00", "background second export uses an immutable snapshot while live collection continues");
             var badExtensionRejected = false;
             try { ExportService.ExportAsync(frozenHistory, Path.Combine(folder, "wrong.csv"), true, TimeSpan.FromMinutes(5), boundary.AddMinutes(1), false); }
             catch (InvalidOperationException) { badExtensionRejected = true; }
@@ -238,7 +238,7 @@ public static class SelfTests
             var minCsv = Path.Combine(folder, "minimum-coverage.csv");
             ExportService.ExportCsv(minCsv, new[] { restoredExtrema, oldMinimum });
             var minimumRows = File.ReadAllLines(minCsv).Skip(1).Select(line => line.Split(',')).ToArray();
-            Check(minimumRows[0][9] == "0.000000" && minimumRows[0][11] == "60.000" && minimumRows[1][9] == "" && minimumRows[1][11] == "",
+            Check(minimumRows[0][9] == "0.00" && minimumRows[0][11] == "60.00" && minimumRows[1][9] == "" && minimumRows[1][11] == "",
                 "CSV appends minima and coverage without changing prior columns, keeping legacy blanks distinct from zero");
             var extremaXlsx = Path.Combine(folder, "extrema-native.xlsx");
             ExcelExporter.Export(extremaXlsx, new[] { lowMinute, oldMinimum }, TimeSpan.FromMinutes(2), boundary.AddMinutes(1));
